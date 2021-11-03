@@ -1,8 +1,31 @@
 import cv2
 import numpy as np
 import time
+import argparse
+import imutils
+from threading import Thread
+from imutils.video import WebcamVideoStream
+from imutils.video import FPS
+from typing import ItemsView
+import serial
+import numpy as np
+import math
 
-net = cv2.dnn.readNet("yolov3.weights", "../darknet/cfg/yolov3.cfg")
+# initialize data
+ser = serial.Serial('/dev/ttyACM0', 9600)
+
+def pixels_to_angle(num_pixels):
+    fov = 90
+    width = 640
+    angle = num_pixels/width*fov - fov/2
+    return int(angle)
+
+def send_angle(angle):
+    flag = 'ag'
+    send_string = ag + str(angle)
+    ser.write(bytes(send_string, 'utf-8'))
+
+net = cv2.dnn.readNet("../yolov3_608.weights", "../darknet/cfg/yolov3.cfg")
 classes = []
 with open("../darknet/data/coco.names", "r") as f:
     classes = [line.strip() for line in f.readlines()]
@@ -12,9 +35,13 @@ output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 colors = np.random.uniform(0, 255, size=(len(classes), 3))
 
 #load input video stream
-cap = cv2.VideoCapture("../rickroll.mp4") 
-if not cap.isOpened():
-    print("Aw, frick")
+cap = cv2.VideoCapture(0)
+#if not cap.isOpened():
+#    print("Aw, frick")
+cap.set(3, 640)
+cap.set(4, 480)
+
+
 #instantiate a variable 'p' to keep count of persons
 p = 0  
 #initialize the writer
@@ -24,7 +51,7 @@ starting_time = time.time()
 frame_id = 0
 while True:
     #print("frame id:" + str(frame_id))
-    ret, frame = cap.read()
+    res, frame = cap.read()
     #print("ret:" + str(ret))
     # print("frame:" + str(frame))
     frame_id += 1
@@ -69,7 +96,6 @@ while True:
         for i in indexes.flatten():
             # extract the bounding box coordinates
             (x, y) = (boxes[i][0], boxes[i][1])
-            print("center_x: " + str(x))
             (w, h) = (boxes[i][2], boxes[i][3])
             label = str(classes[class_ids[i]])
             if label == 'person':
@@ -81,18 +107,43 @@ while True:
             cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
             text = label + ':' + str(p)
             cv2.putText(frame, text, (x, y+30),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 2)
+    
+
+    people_centers = []
+    if len(indexes) > 0:
+        # loop over the indexes we are keeping
+        for i in indexes.flatten():
+            # extract the bounding box coordinates
+            (x, y) = (boxes[i][0], boxes[i][1])
+            (w, h) = (boxes[i][2], boxes[i][3])
+            label = str(classes[class_ids[i]])
+            if label == 'person':
+                people_centers.append(x+(w/2))
+
+    if len(people_centers) != 0:
+        person_angle = pixels_to_angle(people_centers[0])
+        print("Person angle: " + str(person_angle))
+        send_angle(person_angle)
+
+
+
+    """
     if writer is None:
         # initialize our video writer
         fourcc = cv2.VideoWriter_fourcc(*"MJPG")
         writer = cv2.VideoWriter("../bounded_rickroll.mp4", fourcc, 30,(frame.shape[1], frame.shape[0]), True)
-
+    """
     elapsed_time = time.time() - starting_time
     fps = frame_id / elapsed_time
     print("fps: " + str(round(fps, 2)))
     cv2.imshow("Frame", frame)
-    writer.write(frame)
+
+    #writer.write(frame)
     if cv2.waitKey(1) == 27:
         cap.release()
-        writer.release()
+        #writer.release()
         break
+
 cv2.destroyAllWindows()
+
+
