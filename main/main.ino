@@ -1,7 +1,14 @@
 #include <Adafruit_MotorShield.h>
 
+#include <Adafruit_LSM303DLH_Mag.h>
+#include <Adafruit_Sensor.h>
+#include <Wire.h>
+
 // Set up motor shield
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
+
+// Set up magnetometer
+Adafruit_LSM303DLH_Mag_Unified mag = Adafruit_LSM303DLH_Mag_Unified(12345);
 
 // Find motors
 Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
@@ -24,11 +31,13 @@ const uint8_t CMD_BUFFER_LEN = 20;
 char cmd_buffer[CMD_BUFFER_LEN];
 
 // PD params
-double k_p = 0.15;
-double k_d = 0.02;
-int sensDiffPrev = 0;
+double k_p = 0.1;
+double k_d = 0.0;
+int error_prev = 0;
 int tPrevious = 0;
 int baseSpeed = 30;
+
+int setpoint = 0;
 
 // Toggle printing CSV output to serial
 bool print_csv = false;
@@ -43,6 +52,12 @@ void setup() {
   Serial.println("Motor Shield found.");
   tStart = millis();
   tPrevious = tStart;
+
+  if (!mag.begin()) {
+    /* There was a problem detecting the LSM303 ... check your connections */
+    Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
+    while (1);
+  }
 }
 
 void loop() {
@@ -57,10 +72,6 @@ void loop() {
 
   // CSV serial printout for plotting purposes
   if (print_csv){
-    Serial.print(analogRead(leftSens));
-    Serial.print(",");
-    Serial.print(analogRead(rightSens));
-    Serial.print(",");
     Serial.print(leftMotorVal);
     Serial.print(",");
     Serial.println(rightMotorVal);
@@ -157,21 +168,42 @@ void parseCommandBuffer() {
     Serial.println("Starting CSV");
   }
   else if (strncmp(cmd_buffer, "AG", 2) == 0) {
-	// Directly set right motor speed
+    // get person angle from person detection script
     int val = atoi(cmd_buffer + 2);
-    
-    
-    Serial.print("Recieved angle: ");
+    setpoint = calculate_setpoint(val, compass_heading());
+    Serial.print("Person angle: ");
     Serial.println(val);
 
   }
 }
-/*
-int create_setpoint(measured_angle) {
+
+int compass_heading() {
     
+    /* Get a new sensor event */
+    sensors_event_t event;
+    mag.getEvent(&event);
+
+    float Pi = 3.14159;
+
+    // Calculate the angle of the vector y,x
+    float heading = (atan2(event.magnetic.y, event.magnetic.x) * 180) / Pi;
+
+    // Normalize to 0-360
+    if (heading < -180) {
+      heading = 180 + heading;
+    } else if (heading > 180) {
+      heading = heading - 180;
+    }
+    #Serial.print("Heading: ");
+    #Serial.println(heading);
+
+    return int(heading);
 
 }
-*/
+
+int calculate_setpoint(int person_angle, int compass_heading) {
+    return int((compass_heading + person_angle) % 360);
+}
 
 
 // Write currently desired motor values to the motors
@@ -215,19 +247,24 @@ void bangBang() {
 
 // PD control
 void pdControl() {
-  int leftSensVal = analogRead(leftSens);
-  int rightSensVal = analogRead(rightSens);
-  int sensDiff = rightSensVal - leftSensVal;
-  int tElapsed = millis() - tPrevious;
+  float error = (setpoint - compass_heading()) % 360;
+  if (error > 180) {
+    error = error - 360;
+  } else if (error < -180) {
+    error = error + 360;
+  }
+  float tElapsed = (millis() - tPrevious)/1000.0;
 
   // Motor speed difference value: the controller output
   // Sum of kP * sensor difference + k_d * rate of change of the sensor difference
-  int motorDiff = k_p * sensDiff + k_d * (sensDiff-sensDiffPrev)/tElapsed;
+  int motorDiff = k_p * error + k_d * (error-error_prev)/tElapsed;
 
+  float error_prev = error;
+  
   // Apply speed gradient to motors
   leftMotorVal = -max(min(baseSpeed + motorDiff, 128),-128);
   rightMotorVal = max(min(baseSpeed - motorDiff, 128), -128);
   
   // Update last timestamp
-  sensDiffPrev = millis();
+  tPrevious = millis();
 }

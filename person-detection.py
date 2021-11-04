@@ -23,6 +23,7 @@ def pixels_to_angle(num_pixels):
 def send_angle(angle):
     flag = 'AG'
     send_string = flag + str(angle)
+    print(send_string)
     ser.write(bytes(send_string, 'utf-8'))
 
 def print_the_serial():
@@ -30,7 +31,7 @@ def print_the_serial():
     ser.reset_output_buffer()
 
 
-net = cv2.dnn.readNet("../yolov3_608.weights", "../darknet/cfg/yolov3.cfg")
+net = cv2.dnn.readNet("./yolov3.weights", "../darknet/cfg/yolov3.cfg")
 classes = []
 with open("../darknet/data/coco.names", "r") as f:
     classes = [line.strip() for line in f.readlines()]
