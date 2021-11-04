@@ -26,7 +26,9 @@ def send_angle(angle):
     ser.write(bytes(send_string, 'utf-8'))
 
 def print_the_serial():
-    print(str((ser.readline()))[2:-5])
+    print(str(ser.readline()))
+    ser.reset_output_buffer()
+
 
 net = cv2.dnn.readNet("../yolov3_608.weights", "../darknet/cfg/yolov3.cfg")
 classes = []
@@ -146,6 +148,7 @@ while True:
         cap.release()
         #writer.release()
         break
+    #print_the_serial()
 
 cv2.destroyAllWindows()
 
