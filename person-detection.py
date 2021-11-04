@@ -10,9 +10,12 @@ from typing import ItemsView
 import serial
 import numpy as np
 import math
+from Serial_cmd import Serial_cmd
+
+
 
 # initialize data
-ser = serial.Serial('/dev/ttyACM0', 9600)
+ser = Serial_cmd()
 
 def pixels_to_angle(num_pixels):
     fov = 90
@@ -20,18 +23,10 @@ def pixels_to_angle(num_pixels):
     angle = num_pixels/width*fov - fov/2
     return int(angle)
 
-def send_angle(angle):
-    flag = 'AG'
-    send_string = flag + str(angle)
-    print(send_string)
-    ser.write(bytes(send_string, 'utf-8'))
-
-def print_the_serial():
-    print(str(ser.readline()))
-    ser.reset_output_buffer()
 
 
-net = cv2.dnn.readNet("./yolov3.weights", "../darknet/cfg/yolov3.cfg")
+
+net = cv2.dnn.readNet("../yolov3_608.weights", "../darknet/cfg/yolov3.cfg")
 classes = []
 with open("../darknet/data/coco.names", "r") as f:
     classes = [line.strip() for line in f.readlines()]
@@ -129,7 +124,7 @@ while True:
     if len(people_centers) != 0:
         person_angle = pixels_to_angle(people_centers[0])
         print("Person angle: " + str(person_angle))
-        send_angle(person_angle)
+        ser.set_angle(person_angle)
 
 
 
@@ -149,7 +144,7 @@ while True:
         cap.release()
         #writer.release()
         break
-    #print_the_serial()
+    #print(ser.read())
 
 cv2.destroyAllWindows()
 

@@ -43,7 +43,7 @@ int setpoint = 0;
 bool print_csv = false;
 
 void setup() {
-  Serial.begin(9600);          // Set up Serial library at 9600 bps
+  Serial.begin(115200);          // Set up Serial library at 9600 bps
 
   if (!AFMS.begin()) {         // Start motor shield with the default frequency 1.6KHz
     Serial.println("Could not find Motor Shield. Check wiring.");
@@ -194,8 +194,8 @@ int compass_heading() {
     } else if (heading > 180) {
       heading = heading - 180;
     }
-    #Serial.print("Heading: ");
-    #Serial.println(heading);
+    //Serial.print("Heading: ");
+    //Serial.println(heading);
 
     return int(heading);
 
