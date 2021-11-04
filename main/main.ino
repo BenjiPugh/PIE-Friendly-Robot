@@ -30,12 +30,15 @@ uint16_t cmd_buffer_pos = 0;
 const uint8_t CMD_BUFFER_LEN = 20;
 char cmd_buffer[CMD_BUFFER_LEN];
 
+// to account for the motor ratio, adjust later
+double speedratio = 4/2.1;
+
 // PD params
-double k_p = 0.1;
+double k_p = 0.4;
 double k_d = 0.0;
 int error_prev = 0;
 int tPrevious = 0;
-int baseSpeed = 30;
+int baseSpeed = 0;
 
 int setpoint = 0;
 
@@ -262,8 +265,8 @@ void pdControl() {
   float error_prev = error;
   
   // Apply speed gradient to motors
-  leftMotorVal = -max(min(baseSpeed + motorDiff, 128),-128);
-  rightMotorVal = max(min(baseSpeed - motorDiff, 128), -128);
+  leftMotorVal = max(min(baseSpeed + motorDiff, 128),-128);
+  rightMotorVal = speedratio * -max(min(baseSpeed - motorDiff, 128), -128);
   
   // Update last timestamp
   tPrevious = millis();
