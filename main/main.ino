@@ -4,11 +4,21 @@
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
 
+#include <Encoder.h>
+
+// Connect to the two encoder outputs!
+#define ENCODER_A   2
+#define ENCODER_B   3
+
+// These let us convert ticks-to-RPM
+#define GEARING     20
+#define ENCODERMULT 12
+
 // Set up motor shield
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 
 // Set up magnetometer
-Adafruit_LSM303DLH_Mag_Unified mag = Adafruit_LSM303DLH_Mag_Unified(12345);
+//Adafruit_LSM303DLH_Mag_Unified mag = Adafruit_LSM303DLH_Mag_Unified(12345);
 
 // Find motors
 Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
@@ -21,6 +31,8 @@ int rightSens = A1;
 // Current motor values
 int leftMotorVal = 0;
 int rightMotorVal = 0;
+volatile bool motordir1 = FORWARD;
+volatile bool motordir2 = FORWARD;
 
 // Start time
 unsigned long tStart = 0;
@@ -34,7 +46,7 @@ char cmd_buffer[CMD_BUFFER_LEN];
 double speedratio = 4/2.1;
 
 // PD params
-double k_p = 0.4;
+double k_p = 0.15;
 double k_d = 0.0;
 int error_prev = 0;
 int tPrevious = 0;
@@ -46,7 +58,26 @@ int setpoint = 0;
 bool print_csv = false;
 
 void setup() {
-  Serial.begin(115200);          // Set up Serial library at 9600 bps
+  Serial.begin(115200);          // Set up Serial library at 115200 bps
+
+  pinMode(ENCODER_B1, INPUT_PULLUP);
+  pinMode(ENCODER_A1, INPUT_PULLUP);
+  pinMode(ENCODER_B2, INPUT_PULLUP);
+  pinMode(ENCODER_A2, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A1), interruptA, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A2), interruptA, RISING);
+
+  delay(100);
+
+  //while (!Serial) delay(1);
+
+  Serial.println("MMMMotor party!");
+  if (!AFMS.begin()) {         // create with the default frequency 1.6KHz
+  // if (!AFMS.begin(1000)) {  // OR with a different frequency, say 1KHz
+    Serial.println("Could not find Motor Shield. Check wiring.");
+    while (1);
+  }
+
 
   if (!AFMS.begin()) {         // Start motor shield with the default frequency 1.6KHz
     Serial.println("Could not find Motor Shield. Check wiring.");
@@ -56,11 +87,15 @@ void setup() {
   tStart = millis();
   tPrevious = tStart;
 
-  if (!mag.begin()) {
+  leftMotor->setSpeed(0);
+  rightMotor->setSpeed(0);
+
+
+  //if (!mag.begin()) {
     /* There was a problem detecting the LSM303 ... check your connections */
-    Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
-    while (1);
-  }
+  //  Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
+  //  while (1);
+  //}
 }
 
 void loop() {
@@ -73,6 +108,8 @@ void loop() {
   // Write motor outputs
   motorWrite();
 
+  delay(20);
+
   // CSV serial printout for plotting purposes
   if (print_csv){
     Serial.print(leftMotorVal);
@@ -80,6 +117,39 @@ void loop() {
     Serial.println(rightMotorVal);
     delay(20);
   }
+}
+
+void interruptA() {
+  /*
+  motordir = digitalRead(ENCODER_B);
+
+  digitalWrite(LED_BUILTIN, HIGH);
+  uint32_t currA = micros();
+  if (lastA < currA) {
+    // did not wrap around
+    float rev = currA - lastA;  // us
+    rev = 1.0 / rev;            // rev per us
+    rev *= 1000000;             // rev per sec
+    rev *= 60;                  // rev per min
+    rev /= GEARING;             // account for gear ratio
+    rev /= ENCODERMULT;         // account for multiple ticks per rotation
+    RPM = rev;
+  }
+  lastA = currA;
+  digitalWrite(LED_BUILTIN, LOW);
+  */
+  motordir1 = digitalRead(ENCODER_B1);
+  if (motordir1) {
+    count1 += -1;
+    } else {
+      count1 += 1;
+    }
+  motordir2 = digitalRead(ENCODER_B2);
+  if (motordir2) {
+    count2 += -1;
+    } else {
+      count2 += 1;
+    }
 }
 
 // Read from serial input buffer to command buffer
@@ -171,18 +241,19 @@ void parseCommandBuffer() {
     Serial.println("Starting CSV");
   }
   else if (strncmp(cmd_buffer, "AG", 2) == 0) {
-    // get person angle from person detection script
+    // TODO: get person angle calculated in tag_detection.py
     int val = atoi(cmd_buffer + 2);
-    setpoint = calculate_setpoint(val, compass_heading());
-    Serial.print("Person angle: ");
+    // TODO: We'll get person angle from tag_detection.py, but how get setpoint?
+    //setpoint = calculate_setpoint(val, compass_heading());
+    Serial.print("Tag angle: ");
     Serial.println(val);
 
   }
 }
-
+/*
 int compass_heading() {
     
-    /* Get a new sensor event */
+    // Get a new sensor event
     sensors_event_t event;
     mag.getEvent(&event);
 
@@ -191,24 +262,20 @@ int compass_heading() {
     // Calculate the angle of the vector y,x
     float heading = (atan2(event.magnetic.y, event.magnetic.x) * 180) / Pi;
 
-    // Normalize to 0-360
-    if (heading < -180) {
-      heading = 180 + heading;
-    } else if (heading > 180) {
-      heading = heading - 180;
-    }
-    //Serial.print("Heading: ");
-    //Serial.println(heading);
-
     return int(heading);
 
 }
 
 int calculate_setpoint(int person_angle, int compass_heading) {
-    return int((compass_heading + person_angle) % 360);
+    int setpoint = int((compass_heading + person_angle));
+    if (setpoint < -180) {
+      setpoint += 360;
+    } else if (setpoint > 180) {
+      setpoint -= 360;
+    }
+    return int(setpoint)
 }
-
-
+*/
 // Write currently desired motor values to the motors
 // Accounts for H bridge direction changes
 void motorWrite() {
@@ -250,12 +317,22 @@ void bangBang() {
 
 // PD control
 void pdControl() {
-  float error = (setpoint - compass_heading()) % 360;
+  /*Serial.print("Setpoint:");
+  Serial.println(setpoint);
+  float heading = compass_heading();
+  float error = (setpoint - heading);
+  Serial.print("Heading:");
+  Serial.println(heading);*/
+
+  // TODO: find error from angle based on aruco tags
+
   if (error > 180) {
     error = error - 360;
   } else if (error < -180) {
     error = error + 360;
   }
+  Serial.print("Error:");
+  Serial.println(error);
   float tElapsed = (millis() - tPrevious)/1000.0;
 
   // Motor speed difference value: the controller output
