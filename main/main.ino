@@ -1,14 +1,15 @@
 #include <Adafruit_MotorShield.h>
 
-#include <Adafruit_LSM303DLH_Mag.h>
+
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
 
-#include <Encoder.h>
 
 // Connect to the two encoder outputs!
-#define ENCODER_A   2
-#define ENCODER_B   3
+#define LEFT_ENCODER_1   2
+#define LEFT_ENCODER_2   10
+#define RIGHT_ENCODER_1  3
+#define RIGHT_ENCODER_1  11 
 
 // These let us convert ticks-to-RPM
 #define GEARING     20
@@ -17,22 +18,22 @@
 // Set up motor shield
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 
-// Set up magnetometer
-//Adafruit_LSM303DLH_Mag_Unified mag = Adafruit_LSM303DLH_Mag_Unified(12345);
-
 // Find motors
 Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
 Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
 
-// Sensor pins
-int leftSens = A0;
-int rightSens = A1;
 
 // Current motor values
 int leftMotorVal = 0;
 int rightMotorVal = 0;
-volatile bool motordir1 = FORWARD;
-volatile bool motordir2 = FORWARD;
+volatile bool motordir = FORWARD;
+volatile int left_count = 0;
+volatile int right_count = 0;
+
+// Bot Parameters
+float wheel_distance = 0.25; //meters apart the wheels on the bot are
+float wheel_radius = 0.03; //meters wheel radius
+float turn_ratio = wheel_radius / wheel_distance * 360 / GEARING / ENCODERMULT; // angle based on the encoder count delta of the two wheels
 
 // Start time
 unsigned long tStart = 0;
@@ -41,9 +42,6 @@ unsigned long tStart = 0;
 uint16_t cmd_buffer_pos = 0;
 const uint8_t CMD_BUFFER_LEN = 20;
 char cmd_buffer[CMD_BUFFER_LEN];
-
-// to account for the motor ratio, adjust later
-double speedratio = 4/2.1;
 
 // PD params
 double k_p = 0.15;
@@ -60,12 +58,12 @@ bool print_csv = false;
 void setup() {
   Serial.begin(115200);          // Set up Serial library at 115200 bps
 
-  pinMode(ENCODER_B1, INPUT_PULLUP);
-  pinMode(ENCODER_A1, INPUT_PULLUP);
-  pinMode(ENCODER_B2, INPUT_PULLUP);
-  pinMode(ENCODER_A2, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_A1), interruptA, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_A2), interruptA, RISING);
+  pinMode(LEFT_ENCODER_1, INPUT_PULLUP);
+  pinMode(LEFT_ENCODER_2, INPUT_PULLUP);
+  pinMode(RIGHT_ENCODER_1, INPUT_PULLUP);
+  pinMode(RIGHT_ENCODER_2, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(LEFT_ENCODER_1), left_interrupt, RISING);
+  attachInterrupt(digitalPinToInterrupt(RIGHT_ENCODER_1), right_interrupt, RISING);
 
   delay(100);
 
@@ -90,12 +88,6 @@ void setup() {
   leftMotor->setSpeed(0);
   rightMotor->setSpeed(0);
 
-
-  //if (!mag.begin()) {
-    /* There was a problem detecting the LSM303 ... check your connections */
-  //  Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
-  //  while (1);
-  //}
 }
 
 void loop() {
@@ -119,38 +111,31 @@ void loop() {
   }
 }
 
-void interruptA() {
-  /*
-  motordir = digitalRead(ENCODER_B);
+void left_interrupt() {
 
-  digitalWrite(LED_BUILTIN, HIGH);
-  uint32_t currA = micros();
-  if (lastA < currA) {
-    // did not wrap around
-    float rev = currA - lastA;  // us
-    rev = 1.0 / rev;            // rev per us
-    rev *= 1000000;             // rev per sec
-    rev *= 60;                  // rev per min
-    rev /= GEARING;             // account for gear ratio
-    rev /= ENCODERMULT;         // account for multiple ticks per rotation
-    RPM = rev;
-  }
-  lastA = currA;
-  digitalWrite(LED_BUILTIN, LOW);
-  */
-  motordir1 = digitalRead(ENCODER_B1);
-  if (motordir1) {
-    count1 += -1;
+  motordir = digitalRead(LEFT_ENCODER_2);
+  if (motordir) {
+    left_count += -1;
     } else {
-      count1 += 1;
-    }
-  motordir2 = digitalRead(ENCODER_B2);
-  if (motordir2) {
-    count2 += -1;
-    } else {
-      count2 += 1;
+      left_count += 1;
     }
 }
+
+void right_interrupt() {
+
+  motordir = digitalRead(RIGHT_ENCODER_2);
+  if (motordir) {
+    right_count += -1;
+    } else {
+      right_count += 1;
+    }
+}
+
+
+int calculate_angle() {
+  
+   return int((right_count - left_count) * turn_ratio);
+  }
 
 // Read from serial input buffer to command buffer
 // Clear command buffer if newline detected or buffer full
@@ -244,38 +229,22 @@ void parseCommandBuffer() {
     // TODO: get person angle calculated in tag_detection.py
     int val = atoi(cmd_buffer + 2);
     // TODO: We'll get person angle from tag_detection.py, but how get setpoint?
-    //setpoint = calculate_setpoint(val, compass_heading());
+    setpoint = calculate_setpoint(val);
     Serial.print("Tag angle: ");
     Serial.println(val);
 
   }
 }
-/*
-int compass_heading() {
-    
-    // Get a new sensor event
-    sensors_event_t event;
-    mag.getEvent(&event);
 
-    float Pi = 3.14159;
 
-    // Calculate the angle of the vector y,x
-    float heading = (atan2(event.magnetic.y, event.magnetic.x) * 180) / Pi;
-
-    return int(heading);
-
+// Calculate the setpoint based off the current heading and the angle of person given over serial
+int calculate_setpoint(int person_angle) {
+  heading = calculate_angle();
+  return(heading + person_angle);
+  
 }
 
-int calculate_setpoint(int person_angle, int compass_heading) {
-    int setpoint = int((compass_heading + person_angle));
-    if (setpoint < -180) {
-      setpoint += 360;
-    } else if (setpoint > 180) {
-      setpoint -= 360;
-    }
-    return int(setpoint)
-}
-*/
+
 // Write currently desired motor values to the motors
 // Accounts for H bridge direction changes
 void motorWrite() {
@@ -299,38 +268,16 @@ void motorWrite() {
   rightMotor->setSpeed(abs(rightMotorVal));
 }
 
-// Bangbang control
-void bangBang() {
-  int leftSensVal = analogRead(leftSens);
-  int rightSensVal = analogRead(rightSens);
-  int difference = leftSensVal - rightSensVal;
-
-  // Set right motor to max if left sensor is darker, or vice versa
-  if (difference > 0) {
-    leftMotorVal = 0;
-    rightMotorVal = 128;
-  } else {
-    leftMotorVal = -128;
-    rightMotorVal = 0;
-  }
-}
 
 // PD control
 void pdControl() {
-  /*Serial.print("Setpoint:");
+  Serial.print("Setpoint:");
   Serial.println(setpoint);
-  float heading = compass_heading();
+  float heading = calculate_angle();
   float error = (setpoint - heading);
-  Serial.print("Heading:");
-  Serial.println(heading);*/
+  Serial.print("Heading (0-360):");
+  Serial.println(heading);
 
-  // TODO: find error from angle based on aruco tags
-
-  if (error > 180) {
-    error = error - 360;
-  } else if (error < -180) {
-    error = error + 360;
-  }
   Serial.print("Error:");
   Serial.println(error);
   float tElapsed = (millis() - tPrevious)/1000.0;
@@ -339,11 +286,11 @@ void pdControl() {
   // Sum of kP * sensor difference + k_d * rate of change of the sensor difference
   int motorDiff = k_p * error + k_d * (error-error_prev)/tElapsed;
 
-  float error_prev = error;
+  error_prev = error;
   
   // Apply speed gradient to motors
   leftMotorVal = max(min(baseSpeed + motorDiff, 128),-128);
-  rightMotorVal = speedratio * -max(min(baseSpeed - motorDiff, 128), -128);
+  rightMotorVal = -max(min(baseSpeed - motorDiff, 128), -128);
   
   // Update last timestamp
   tPrevious = millis();
