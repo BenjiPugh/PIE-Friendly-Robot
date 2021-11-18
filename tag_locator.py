@@ -8,6 +8,7 @@ import imutils
 import sys
 import cv2.aruco as aruco
 from imutils.video import VideoStream
+from Serial_cmd import Serial_cmd
 
 
 # initialize data
@@ -27,12 +28,15 @@ print("[INFO] starting video stream...")
 vs = VideoStream(src=0).start()
 time.sleep(2.0)
 
+print("Started camera")
+
 # Parameter of the Camera
 FOV = np.deg2rad(90)
 
 
 # loop over the frames from the video stream
 while True:
+	
 	# grab the frame from the threaded video stream and resize it
 	# to have a maximum width of 1000 pixels
 	frame = vs.read()
@@ -65,6 +69,8 @@ while True:
 			cv2.line(frame, topRight, bottomRight, (0, 255, 0), 2)
 			cv2.line(frame, bottomRight, bottomLeft, (0, 255, 0), 2)
 			cv2.line(frame, bottomLeft, topLeft, (0, 255, 0), 2)
+
+			
 			# compute and draw the center (x, y)-coordinates of the
 			# ArUco marker
 			cX = int((topLeft[0] + bottomRight[0]) / 2.0)
@@ -80,6 +86,8 @@ while True:
 
 			print("Theta: " + str(theta))
 			ser.set_angle(theta)
+			print(ser.read())
+			
 			
 			
             
@@ -90,8 +98,10 @@ while True:
 	# if the `q` key was pressed, break from the loop
 	if key == ord("q"):
 		break
+	
 
 # do a bit of cleanup
 cv2.destroyAllWindows()
 vs.stop()
+
 

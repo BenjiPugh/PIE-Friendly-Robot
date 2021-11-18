@@ -42,7 +42,7 @@ class Serial_cmd:
             for device in devices:
                 if (device.vid, device.pid) in Serial_cmd.Arduino_IDs:
                     try:
-                        self.dev = serial.Serial(device.device, 115200)
+                        self.dev = serial.Serial(device.device, 115200, write_timeout=1)
                         self.connected = True
                         print('Connected to {!s}...'.format(device.device))
                     except:
@@ -59,16 +59,27 @@ class Serial_cmd:
 
     def write(self, command):
         if self.connected:
-            self.dev.write('{!s}\r'.format(command).encode())
+            try:
+                self.dev.write('{!s}\r'.format(command).encode())
+            except:
+                pass
 
     def read(self):
         if self.connected:
-            return self.dev.readline().decode()
+            #return self.dev.readline().decode()
+            data_str = ""
+            while (self.dev.inWaiting() > 0):
+                # read the bytes and convert from binary array to ASCII
+                data_str += self.dev.read(self.dev.inWaiting()).decode()
+                # print the incoming string without putting a new-line
+                # ('\n') automatically after every print()
+            return data_str
 
 
     def set_angle(self, val):
         if self.connected:
             self.write('AG{:X}'.format(int(val)))
+
 
     def get_green(self):
         if self.connected:

@@ -42,7 +42,7 @@ const uint8_t CMD_BUFFER_LEN = 20;
 char cmd_buffer[CMD_BUFFER_LEN];
 
 // PD params
-double k_p = 0.15;
+double k_p = 3;
 double k_d = 0.0;
 int error_prev = 0;
 int tPrevious = 0;
@@ -135,11 +135,13 @@ int calculate_angle() {
    return int((right_count - left_count) * turn_ratio);
   }
 
+
+
 // Read from serial input buffer to command buffer
 // Clear command buffer if newline detected or buffer full
 // Read from serial input buffer otherwise
 void detectSerial() {
-  if (Serial.available()) {
+  while (Serial.available()) {
 		char ch = Serial.read(); // Read character
 		
 		if (ch == '\r') {
@@ -276,8 +278,8 @@ void pdControl() {
   //Serial.print("Heading:");
   //Serial.println(heading);
 
-  Serial.print("Error:");
-  Serial.println(error);
+  //Serial.print("Error:");
+  //Serial.println(error);
   float tElapsed = (millis() - tPrevious)/1000.0;
 
   // Motor speed difference value: the controller output
