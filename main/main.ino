@@ -1,7 +1,5 @@
 #include <Adafruit_MotorShield.h>
 
-
-#include <Adafruit_Sensor.h>
 #include <Wire.h>
 
 
@@ -9,7 +7,7 @@
 #define LEFT_ENCODER_1   2
 #define LEFT_ENCODER_2   10
 #define RIGHT_ENCODER_1  3
-#define RIGHT_ENCODER_1  11 
+#define RIGHT_ENCODER_2  11 
 
 // These let us convert ticks-to-RPM
 #define GEARING     20
@@ -239,7 +237,7 @@ void parseCommandBuffer() {
 
 // Calculate the setpoint based off the current heading and the angle of person given over serial
 int calculate_setpoint(int person_angle) {
-  heading = calculate_angle();
+  int heading = calculate_angle();
   return(heading + person_angle);
   
 }
