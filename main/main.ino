@@ -269,12 +269,12 @@ void motorWrite() {
 
 // PD control
 void pdControl() {
-  Serial.print("Setpoint:");
-  Serial.println(setpoint);
+  //Serial.print("Setpoint:");
+  //Serial.println(setpoint);
   float heading = calculate_angle();
   float error = (setpoint - heading);
-  Serial.print("Heading (0-360):");
-  Serial.println(heading);
+  //Serial.print("Heading:");
+  //Serial.println(heading);
 
   Serial.print("Error:");
   Serial.println(error);
@@ -288,7 +288,7 @@ void pdControl() {
   
   // Apply speed gradient to motors
   leftMotorVal = max(min(baseSpeed + motorDiff, 128),-128);
-  rightMotorVal = -max(min(baseSpeed - motorDiff, 128), -128);
+  rightMotorVal = max(min(baseSpeed - motorDiff, 128), -128);
   
   // Update last timestamp
   tPrevious = millis();
