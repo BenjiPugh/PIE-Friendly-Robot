@@ -10,6 +10,9 @@ import cv2.aruco as aruco
 from imutils.video import VideoStream
 
 
+# initialize data
+ser = Serial_cmd()
+
 #cap = cv2.VideoCapture(0)
 starting_time = time.time()
 frame_id = 0
@@ -73,10 +76,10 @@ while True:
 				cv2.FONT_HERSHEY_SIMPLEX,
 				0.5, (0, 255, 0), 2)
 			
-			theta =  np.rad2deg(np.arctan((2*cX/frame.shape[1] - 1)*np.tan(FOV/2)))
-			#theta = (cX/frame.shape[1])*90 - 45
+			theta =  - np.rad2deg(np.arctan((2*cX/frame.shape[1] - 1)*np.tan(FOV/2)))
 
 			print("Theta: " + str(theta))
+			ser.set_angle(theta)
 			
 			
             
