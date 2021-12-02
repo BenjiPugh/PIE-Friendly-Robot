@@ -25,21 +25,23 @@ arucoParams.cornerRefinementWinSize = 25
 
 # initialize the video stream and allow the camera sensor to warm up
 print("[INFO] starting video stream...")
-vs = VideoStream(src=0).start()
+vs = VideoStream(src=4).start()
 time.sleep(2.0)
 
 print("Started camera")
 
-# Parameter of the Camera
-FOV = np.deg2rad(90)
+# Parameter of the Camera FOV used for angle calculation
+FOV = np.deg2rad(120)
 
 
 # loop over the frames from the video stream
 while True:
 	
-	# grab the frame from the threaded video stream and resize it
-	# to have a maximum width of 1000 pixels
+	# Grab the frame from the threaded video stream, rotate it, and convert
+	# to grayscale.
 	frame = vs.read()
+	frame = cv2.flip(frame, -1)
+	frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 	#frame = imutils.resize(frame, width=1000)
 	# detect ArUco markers in the input frame
 	(corners, ids, rejected) = cv2.aruco.detectMarkers(frame,
