@@ -4,10 +4,10 @@
 
 
 // Connect to the two encoder outputs!
-#define LEFT_ENCODER_1   2
-#define LEFT_ENCODER_2   10
-#define RIGHT_ENCODER_1  3
-#define RIGHT_ENCODER_2  11 
+#define LEFT_ENCODER_1   3
+#define LEFT_ENCODER_2   11
+#define RIGHT_ENCODER_1  2
+#define RIGHT_ENCODER_2  10
 
 // These let us convert ticks-to-RPM
 #define GEARING     20
@@ -29,8 +29,8 @@ volatile int left_count = 0;
 volatile int right_count = 0;
 
 // Bot Parameters
-float wheel_distance = 0.25; //meters apart the wheels on the bot are
-float wheel_radius = 0.03; //meters wheel radius
+float wheel_distance = 0.165; //meters apart the wheels on the bot are
+float wheel_radius = 0.03175; //meters wheel radius
 float turn_ratio = wheel_radius / wheel_distance * 360 / GEARING / ENCODERMULT; // angle based on the encoder count delta of the two wheels
 
 // Start time
@@ -42,11 +42,12 @@ const uint8_t CMD_BUFFER_LEN = 20;
 char cmd_buffer[CMD_BUFFER_LEN];
 
 // PD params
-double k_p = 3;
+double k_p = 1;
 double k_d = 0.0;
 int error_prev = 0;
 int tPrevious = 0;
-int baseSpeed = 0;
+int baseSpeed = 40;
+int topSpeed = 90;
 
 int setpoint = 0;
 
@@ -94,7 +95,7 @@ void loop() {
   
   //bangBang(); // Bang-bang control loop (disabled)
   pdControl(); // PID main control loop
-  
+  //rightMotorVal = -50; //Used simply for testing orientation of motor
   // Write motor outputs
   motorWrite();
 
@@ -113,9 +114,9 @@ void left_interrupt() {
 
   motordir = digitalRead(LEFT_ENCODER_2);
   if (motordir) {
-    left_count += -1;
+    left_count += 1;
     } else {
-      left_count += 1;
+      left_count += -1;
     }
 }
 
@@ -131,7 +132,10 @@ void right_interrupt() {
 
 
 int calculate_angle() {
-  
+  //Serial.print("right count:");
+  //Serial.println(right_count);
+  //Serial.print("left count:");
+  //Serial.println(left_count);
    return int((right_count - left_count) * turn_ratio);
   }
 
@@ -278,8 +282,16 @@ void pdControl() {
   //Serial.print("Heading:");
   //Serial.println(heading);
 
-  //Serial.print("Error:");
-  //Serial.println(error);
+  // Process the error to make sure it is between -180 and 180
+  while (error > 180) {
+    error = error - 360;
+    }
+
+  while (error < -180) {
+    error = error + 360;
+    }
+  Serial.print("Error:");
+  Serial.println(error);
   float tElapsed = (millis() - tPrevious)/1000.0;
 
   // Motor speed difference value: the controller output
@@ -289,8 +301,12 @@ void pdControl() {
   error_prev = error;
   
   // Apply speed gradient to motors
-  leftMotorVal = max(min(baseSpeed + motorDiff, 128),-128);
-  rightMotorVal = max(min(baseSpeed - motorDiff, 128), -128);
+  leftMotorVal = max(min(baseSpeed - motorDiff, topSpeed),-topSpeed);
+  rightMotorVal = max(min(baseSpeed + motorDiff, topSpeed), -topSpeed);
+  //Serial.print("Left_M:");
+  //Serial.println(leftMotorVal);
+  //Serial.print("Right_M:");
+  //Serial.println(rightMotorVal);
   
   // Update last timestamp
   tPrevious = millis();
