@@ -54,6 +54,8 @@ int setpoint = 0;
 // Toggle printing CSV output to serial
 bool print_csv = false;
 
+// Debug led pin
+int raspi_led = 5;
 void setup() {
   Serial.begin(115200);          // Set up Serial library at 115200 bps
 
@@ -87,6 +89,8 @@ void setup() {
   leftMotor->setSpeed(0);
   rightMotor->setSpeed(0);
 
+  pinMode(raspi_led, OUTPUT);
+  digitalWrite(raspi_led, false);
 }
 
 void loop() {
@@ -236,7 +240,7 @@ void parseCommandBuffer() {
     setpoint = calculate_setpoint(val);
     Serial.print("Tag angle: ");
     Serial.println(val);
-
+    digitalWrite(raspi_led, true);
   }
 }
 
