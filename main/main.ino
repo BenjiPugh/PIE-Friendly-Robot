@@ -13,6 +13,12 @@
 #define GEARING     20
 #define ENCODERMULT 12
 
+// Debug led pin
+int raspi_led = 5;
+
+// Distance 
+int distance_sens = A0;
+
 // Set up motor shield
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 
@@ -42,7 +48,7 @@ const uint8_t CMD_BUFFER_LEN = 20;
 char cmd_buffer[CMD_BUFFER_LEN];
 
 // PD params
-double k_p = 1;
+double k_p = 0.5;
 double k_d = 0.0;
 int error_prev = 0;
 int tPrevious = 0;
@@ -51,11 +57,18 @@ int topSpeed = 90;
 
 int setpoint = 0;
 
+// Behavioral FSM
+enum class botState {
+  Searching,
+  Follow,
+  ConsentWait,
+  Hug
+};
+
+
 // Toggle printing CSV output to serial
 bool print_csv = false;
 
-// Debug led pin
-int raspi_led = 5;
 void setup() {
   Serial.begin(115200);          // Set up Serial library at 115200 bps
 
@@ -118,9 +131,9 @@ void left_interrupt() {
 
   motordir = digitalRead(LEFT_ENCODER_2);
   if (motordir) {
-    left_count += 1;
+    left_count += -1;
     } else {
-      left_count += -1;
+      left_count += 1;
     }
 }
 
@@ -245,6 +258,7 @@ void parseCommandBuffer() {
 }
 
 
+
 // Calculate the setpoint based off the current heading and the angle of person given over serial
 int calculate_setpoint(int person_angle) {
   int heading = calculate_angle();
@@ -276,7 +290,6 @@ void motorWrite() {
   rightMotor->setSpeed(abs(rightMotorVal));
 }
 
-
 // PD control
 void pdControl() {
   //Serial.print("Setpoint:");
@@ -307,10 +320,10 @@ void pdControl() {
   // Apply speed gradient to motors
   leftMotorVal = max(min(baseSpeed - motorDiff, topSpeed),-topSpeed);
   rightMotorVal = max(min(baseSpeed + motorDiff, topSpeed), -topSpeed);
-  //Serial.print("Left_M:");
-  //Serial.println(leftMotorVal);
-  //Serial.print("Right_M:");
-  //Serial.println(rightMotorVal);
+  Serial.print("Left_M:");
+  Serial.println(leftMotorVal);
+  Serial.print("Right_M:");
+  Serial.println(rightMotorVal);
   
   // Update last timestamp
   tPrevious = millis();
