@@ -2,6 +2,7 @@
 
 #include <Wire.h>
 
+#include "main.h"
 
 // Connect to the two encoder outputs!
 #define LEFT_ENCODER_1   3
@@ -58,12 +59,13 @@ int topSpeed = 90;
 int setpoint = 0;
 
 // Behavioral FSM
-enum class botState {
+/*enum class botState {
   Searching,
   Follow,
   ConsentWait,
   Hug
-};
+};*/
+botState state;
 
 
 // Toggle printing CSV output to serial
@@ -104,17 +106,57 @@ void setup() {
 
   pinMode(raspi_led, OUTPUT);
   digitalWrite(raspi_led, false);
+
+  state = Searching;
 }
 
 void loop() {
-
   detectSerial();
+
+  // Behavioral FSM
+  switch(state) {
+    case Searching:
+      // Spin in place slowly until tag is detected
+      leftMotorVal = baseSpeed / 2; // or whatever speed works
+      rightMotorVal = 0;
+      motorWrite();
+      if (/*tag is detected*/) {
+        state = Follow;
+      }
+      break;
+    case Follow:
+      // PID controlled movement
+      pdControl();
+      // Update motor speeds
+      motorWrite();
+      if (/*we lose track of the tag*/) {
+        state = Searching;
+      }
+      distance_reading = analogRead(distance_sens);
+      if (distance_reading > hug_threshold) {
+        state = ConsentWait;
+      }
+      break;
+    case ConsentWait:
+      // Set a timer once you get into this state.
+      // Stop and blink LED
+      // If button is pressed
+      state = Hug;
+      // If the timer expires before button is pressed
+      state = Searching;
+      break;
+    case Hug:
+      // Incorporate hug module
+      state = Searching;
+      break;
+  }
+
   
   //bangBang(); // Bang-bang control loop (disabled)
-  pdControl(); // PID main control loop
+  //pdControl(); // PID main control loop - moved into FSM
   //rightMotorVal = -50; //Used simply for testing orientation of motor
   // Write motor outputs
-  motorWrite();
+  //motorWrite(); - moved into FSM
 
   delay(20);
 
