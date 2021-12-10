@@ -1,5 +1,5 @@
 #include <Adafruit_MotorShield.h>
-
+#include <Servo.h>
 #include <Wire.h>
 
 #include "main.h"
@@ -14,11 +14,27 @@
 #define GEARING     20
 #define ENCODERMULT 12
 
+Servo leftArm;
+Servo rightArm;
+
+// Pin Numbers
+const int buttonPin = 2;     // the number of the pushbutton pin
+const int leftArmPin =  8;      // the number of the left arm servo pin
+const int rightArmPin =  9;      // the number of the right arm servo pin
+const int ledPin =  12;      // the number of the button LED
+
 // Debug led pin
 int raspi_led = 5;
 
-// Distance 
+// Distance sensor pin
 int distance_sens = A0;
+
+// Total guess for the distance sensor reading.
+// TODO: actually test and determine this.
+float hug_threshold = 2.0; 
+unsigned long prev_timestamp;
+unsigned long current_timestamp;
+unsigned long consent_wait_time;
 
 // Set up motor shield
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
@@ -67,12 +83,25 @@ int setpoint = 0;
 };*/
 botState state;
 
+// variable for reading the pushbutton status
+int buttonState = 0;
 
 // Toggle printing CSV output to serial
 bool print_csv = false;
 
 void setup() {
   Serial.begin(115200);          // Set up Serial library at 115200 bps
+
+  // Initialize pushbutton pin as an input
+  pinMode(buttonPin, INPUT);
+  digitalWrite(buttonPin, HIGH);
+
+  //Initialize the button LED as an output
+  pinMode(ledPin, OUTPUT);
+
+  //attach servos to respective pins
+  leftArm.attach(leftArmPin);
+  rightArm.attach(rightArmPin);
 
   pinMode(LEFT_ENCODER_1, INPUT_PULLUP);
   pinMode(LEFT_ENCODER_2, INPUT_PULLUP);
@@ -131,22 +160,48 @@ void loop() {
       motorWrite();
       if (/*we lose track of the tag*/) {
         state = Searching;
+        break;
       }
       distance_reading = analogRead(distance_sens);
       if (distance_reading > hug_threshold) {
+        prev_timestamp = millis();
         state = ConsentWait;
       }
       break;
     case ConsentWait:
-      // Set a timer once you get into this state.
-      // Stop and blink LED
-      // If button is pressed
-      state = Hug;
-      // If the timer expires before button is pressed
-      state = Searching;
+      buttonState = digitalRead(buttonPin);
+      // If button is NOT pressed this iteration
+      if (buttonState == HIGH) {
+        // turn LED on:
+        digitalWrite(ledPin, HIGH);
+        leftArm.write(90);
+        rightArm.write(90);
+      // If button is pressed at any point,
+      // transition to Hug state
+      } else {
+         state = Hug;
+         break;
+      }
+      current_timestamp = millis();
+      // If the time since transitioning into ConsentWait state
+      // exceeds consent_wait_time, go back to Searching
+      if (current_timestamp - prev_timestamp > consent_wait_time) {
+         state = Searching;
+      }
       break;
     case Hug:
-      // Incorporate hug module
+      // turn LED off:
+      digitalWrite(ledPin, LOW);
+      leftArm.write(60);
+      rightArm.write(60);
+      delay(3700);
+      leftArm.write(90);
+      rightArm.write(90);
+      delay(3500);
+      leftArm.write(120);
+      rightArm.write(120);
+      delay(3700);
+
       state = Searching;
       break;
   }
@@ -289,9 +344,7 @@ void parseCommandBuffer() {
     Serial.println("Starting CSV");
   }
   else if (strncmp(cmd_buffer, "AG", 2) == 0) {
-    // TODO: get person angle calculated in tag_detection.py
     int val = atoi(cmd_buffer + 2);
-    // TODO: We'll get person angle from tag_detection.py, but how get setpoint?
     setpoint = calculate_setpoint(val);
     Serial.print("Tag angle: ");
     Serial.println(val);
