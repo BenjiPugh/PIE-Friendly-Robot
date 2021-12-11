@@ -78,7 +78,7 @@ class Serial_cmd:
 
     def set_angle(self, val):
         if self.connected:
-            self.write('AG{:X}'.format(int(val)))
+            self.write('AG{:d}'.format(int(val)))
 
 
     def get_green(self):
