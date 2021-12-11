@@ -18,7 +18,7 @@ Servo leftArm;
 Servo rightArm;
 
 // Pin Numbers
-const int buttonPin = 2;     // the number of the pushbutton pin
+const int buttonPin = 0;     // the number of the pushbutton pin
 const int leftArmPin =  8;      // the number of the left arm servo pin
 const int rightArmPin =  9;      // the number of the right arm servo pin
 const int ledPin =  12;      // the number of the button LED
@@ -28,13 +28,13 @@ int raspi_led = 5;
 
 // Distance sensor pin
 int distance_sens = A0;
+int distance_reading = 0;
 
 // Total guess for the distance sensor reading.
 // TODO: actually test and determine this.
-float hug_threshold = 2.0; 
-unsigned long prev_timestamp;
-unsigned long current_timestamp;
-unsigned long consent_wait_time;
+int hug_threshold = 500; 
+unsigned long prev_timestamp = 0;
+unsigned long consent_wait_time = 3000;
 
 // Set up motor shield
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
@@ -65,12 +65,12 @@ const uint8_t CMD_BUFFER_LEN = 20;
 char cmd_buffer[CMD_BUFFER_LEN];
 
 // PD params
-double k_p = 0.5;
+double k_p = 0.6;
 double k_d = 0.0;
 int error_prev = 0;
 int tPrevious = 0;
-int baseSpeed = 40;
-int topSpeed = 90;
+int baseSpeed = 70;
+int topSpeed = 120;
 
 int setpoint = 0;
 
@@ -83,6 +83,8 @@ int setpoint = 0;
 };*/
 botState state;
 
+// Stores the last communication time, used in the FSM
+unsigned long lastComm = 0;
 // variable for reading the pushbutton status
 int buttonState = 0;
 
@@ -93,8 +95,7 @@ void setup() {
   Serial.begin(115200);          // Set up Serial library at 115200 bps
 
   // Initialize pushbutton pin as an input
-  pinMode(buttonPin, INPUT);
-  digitalWrite(buttonPin, HIGH);
+  pinMode(buttonPin, INPUT_PULLUP);
 
   //Initialize the button LED as an output
   pinMode(ledPin, OUTPUT);
@@ -110,7 +111,9 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(LEFT_ENCODER_1), left_interrupt, RISING);
   attachInterrupt(digitalPinToInterrupt(RIGHT_ENCODER_1), right_interrupt, RISING);
 
-  delay(100);
+  lastComm = millis();
+
+  delay(1000);
 
   //while (!Serial) delay(1);
 
@@ -130,6 +133,7 @@ void setup() {
   tStart = millis();
   tPrevious = tStart;
 
+
   leftMotor->setSpeed(0);
   rightMotor->setSpeed(0);
 
@@ -142,23 +146,54 @@ void setup() {
 void loop() {
   detectSerial();
 
-  // Behavioral FSM
+
+
+  
+  //bangBang(); // Bang-bang control loop (disabled)
+  //pdControl(); // PID main control loop - moved into FSM
+
+  FSM();
+
+  // Write motor outputs
+  motorWrite();
+
+  delay(20);
+
+  // CSV serial printout for plotting purposes
+  if (print_csv){
+    Serial.print(leftMotorVal);
+    Serial.print(",");
+    Serial.println(rightMotorVal);
+    delay(20);
+  }
+}
+
+void FSM() {
+    // Behavioral FSM
   switch(state) {
     case Searching:
+      Serial.println("Searching");
       // Spin in place slowly until tag is detected
-      leftMotorVal = baseSpeed / 2; // or whatever speed works
+      //leftMotorVal = baseSpeed / 2; // or whatever speed works
+
+      leftMotorVal = 0;
       rightMotorVal = 0;
-      motorWrite();
-      if (/*tag is detected*/) {
+      
+      
+      // If the raspberry pi has recently communicated, start following
+      if (millis() - lastComm < 300) {
         state = Follow;
+        break;
       }
       break;
     case Follow:
       // PID controlled movement
+      Serial.println("Following");
       pdControl();
       // Update motor speeds
-      motorWrite();
-      if (/*we lose track of the tag*/) {
+      
+      // If the raspberry pi has stopped communicating, stop
+      if (millis() - lastComm > 400) {
         state = Searching;
         break;
       }
@@ -166,9 +201,14 @@ void loop() {
       if (distance_reading > hug_threshold) {
         prev_timestamp = millis();
         state = ConsentWait;
+        break;
       }
       break;
     case ConsentWait:
+      Serial.println("Waiting");
+      leftMotorVal = 0;
+      rightMotorVal = 0;
+      
       buttonState = digitalRead(buttonPin);
       // If button is NOT pressed this iteration
       if (buttonState == HIGH) {
@@ -179,19 +219,25 @@ void loop() {
       // If button is pressed at any point,
       // transition to Hug state
       } else {
+         digitalWrite(ledPin, LOW);
          state = Hug;
          break;
       }
-      current_timestamp = millis();
+      
       // If the time since transitioning into ConsentWait state
       // exceeds consent_wait_time, go back to Searching
-      if (current_timestamp - prev_timestamp > consent_wait_time) {
+      if (millis() - prev_timestamp > consent_wait_time) {
+         digitalWrite(ledPin, LOW);
          state = Searching;
+         break;
       }
       break;
     case Hug:
+      leftMotorVal = 0;
+      rightMotorVal = 0;
+      Serial.println("Waiting");
       // turn LED off:
-      digitalWrite(ledPin, LOW);
+      
       leftArm.write(60);
       rightArm.write(60);
       delay(3700);
@@ -204,23 +250,6 @@ void loop() {
 
       state = Searching;
       break;
-  }
-
-  
-  //bangBang(); // Bang-bang control loop (disabled)
-  //pdControl(); // PID main control loop - moved into FSM
-  //rightMotorVal = -50; //Used simply for testing orientation of motor
-  // Write motor outputs
-  //motorWrite(); - moved into FSM
-
-  delay(20);
-
-  // CSV serial printout for plotting purposes
-  if (print_csv){
-    Serial.print(leftMotorVal);
-    Serial.print(",");
-    Serial.println(rightMotorVal);
-    delay(20);
   }
 }
 
@@ -346,6 +375,7 @@ void parseCommandBuffer() {
   else if (strncmp(cmd_buffer, "AG", 2) == 0) {
     int val = atoi(cmd_buffer + 2);
     setpoint = calculate_setpoint(val);
+    lastComm = millis();
     Serial.print("Tag angle: ");
     Serial.println(val);
     digitalWrite(raspi_led, true);
@@ -402,8 +432,8 @@ void pdControl() {
   while (error < -180) {
     error = error + 360;
     }
-  Serial.print("Error:");
-  Serial.println(error);
+  //Serial.print("Error:");
+  //Serial.println(error);
   float tElapsed = (millis() - tPrevious)/1000.0;
 
   // Motor speed difference value: the controller output
@@ -415,10 +445,10 @@ void pdControl() {
   // Apply speed gradient to motors
   leftMotorVal = max(min(baseSpeed - motorDiff, topSpeed),-topSpeed);
   rightMotorVal = max(min(baseSpeed + motorDiff, topSpeed), -topSpeed);
-  Serial.print("Left_M:");
-  Serial.println(leftMotorVal);
-  Serial.print("Right_M:");
-  Serial.println(rightMotorVal);
+  //Serial.print("Left_M:");
+  //Serial.println(leftMotorVal);
+  //Serial.print("Right_M:");
+  //Serial.println(rightMotorVal);
   
   // Update last timestamp
   tPrevious = millis();
