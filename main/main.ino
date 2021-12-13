@@ -86,7 +86,7 @@ botState state;
 // Stores the last communication time, used in the FSM
 unsigned long lastComm = 0;
 // variable for reading the pushbutton status
-int buttonState = 0;
+bool buttonState = false;
 
 // Toggle printing CSV output to serial
 bool print_csv = false;
