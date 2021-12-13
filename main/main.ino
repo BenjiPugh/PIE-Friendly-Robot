@@ -236,17 +236,19 @@ void FSM() {
       leftMotorVal = 0;
       rightMotorVal = 0;
       Serial.println("Waiting");
-      // turn LED off:
       
-      leftArm.write(60);
-      rightArm.write(60);
-      delay(3700);
+      // Curl arms in
+      leftArm.write(140);
+      rightArm.write(147);
+      delay(2000);
+      // Hold arms closed
       leftArm.write(90);
       rightArm.write(90);
       delay(3500);
-      leftArm.write(120);
-      rightArm.write(120);
-      delay(3700);
+      // Uncurl arms
+      leftArm.write(60);
+      rightArm.write(60);
+      delay(2150);
 
       state = Searching;
       break;
